@@ -43,6 +43,7 @@ class Sticky extends Component {
         this.skipNextScrollEvent = false;
         this.scrollTop = -1;
 
+        this.topBoundaryTarget;
         this.bottomBoundaryTarget;
         this.topTarget;
         this.subscribers;
@@ -79,30 +80,49 @@ class Sticky extends Component {
         return top;
     }
 
-    getTargetBottom (target) {
+    getBottomPosition (bottom) {
+        // TODO, topTarget is for current layout, may remove
+        // a top argument can be provided to override reading from the props
+        bottom = bottom || this.props.bottom || this.props.bottomTarget || 0;
+        if (typeof top === 'string') {
+            if (!this.bottomTarget) {
+                this.bottomTarget = doc.querySelector(bottom);
+            }
+            bottom = this.getTargetHeight(this.bottomTarget);
+        }
+        return bottom;
+    }
+
+    getTargetBound (target, type = 'bottom') {
         if (!target) {
             return -1;
         }
         var rect = target.getBoundingClientRect();
-        return this.scrollTop + rect.bottom;
+        return this.scrollTop + rect[type];
     }
 
-    getBottomBoundary (bottomBoundary) {
-        // a bottomBoundary can be provided to avoid reading from the props
-        var boundary = bottomBoundary || this.props.bottomBoundary;
+    getBoundary (boundary, type = 'bottom') {
+        // a boundary can be provided to avoid reading from the props
+        var boundary = type === 'bottom' ? (boundary || this.props.bottomBoundary) : (boundary || this.props.topBoundary);
 
-        // TODO, bottomBoundary was an object, depricate it later.
+        // TODO, boundary was an object, depricate it later.
         if (typeof boundary === 'object') {
             boundary = boundary.value || boundary.target || 0;
         }
 
         if (typeof boundary === 'string') {
-            if (!this.bottomBoundaryTarget) {
-                this.bottomBoundaryTarget = doc.querySelector(boundary);
+            if (type === 'bottom') {
+              if (!this.bottomBoundaryTarget) {
+                  this.bottomBoundaryTarget = doc.querySelector(boundary);
+              }
+            } else {
+              if (!this.topBoundaryTarget) {
+                  this.topBoundaryTarget = doc.querySelector(boundary);
+              }
             }
-            boundary = this.getTargetBottom(this.bottomBoundaryTarget);
+            boundary = this.getTargetBound(type === 'bottom' ? this.bottomBoundaryTarget : this.topBoundaryTarget, type);
         }
-        return boundary && boundary > 0 ? boundary : Infinity;
+        return boundary && boundary > 0 ? boundary : (type === 'bottom' ? Infinity : -Infinity);
     }
 
     reset () {
@@ -149,8 +169,8 @@ class Sticky extends Component {
             height: height,
             x: outerRect.left,
             y: outerY,
-            bottomBoundary: this.getBottomBoundary(options.bottomBoundary),
-            topBoundary: outerY
+            bottomBoundary: this.getBoundary(options.bottomBoundary, 'bottom'),
+            topBoundary: (this.props.topBoundary || !isNaN(this.props.topBoundary)) ? this.getBoundary(options.topBoundary, 'top') : outerY
         });
     }
 
@@ -224,7 +244,13 @@ class Sticky extends Component {
             this.stickyTop = this.stickyBottom - this.state.height;
             this.release(this.stickyTop);
         } else {
-            if (this.state.height > winHeight - this.state.top) {
+            if (
+              !this.props.stickToBottom && this.state.height > winHeight - this.state.top
+              || this.props.stickToBottom && this.state.bottomBoundary - winHeight < window.pageYOffset
+            ) {
+                if (this.props.stickToBottom && this.state.bottomBoundary - winHeight < window.pageYOffset) {
+                  this.state.status = 0
+                }
                 // In this case, Sticky is higher then viewport minus top offset
                 switch (this.state.status) {
                     case STATUS_ORIGINAL:
@@ -235,6 +261,7 @@ class Sticky extends Component {
                         // from ORIGINAL when calling window.scrollTo().
                         // break;
                     case STATUS_RELEASED:
+                        if (this.props.stickToBottom) break;
                         // If "top" and "bottom" are inbetween stickyTop and stickyBottom, then Sticky is in
                         // RELEASE status. Otherwise, it changes to FIXED status, and its bottom sticks to
                         // viewport bottom when scrolling down, or its top sticks to viewport top when scrolling up.
@@ -365,7 +392,8 @@ class Sticky extends Component {
         // TODO, "overflow: auto" prevents collapse, need a good way to get children height
         var innerStyle = {
             position: this.state.status === STATUS_FIXED ? 'fixed' : 'relative',
-            top: this.state.status === STATUS_FIXED ? '0px' : '',
+            top: !this.props.stickToBottom && this.state.status === STATUS_FIXED ? '0px' : '',
+            bottom: this.props.stickToBottom && this.state.status === STATUS_FIXED ? '0px' : '',
             zIndex: this.props.innerZ
         };
         var outerStyle = {};
@@ -414,7 +442,17 @@ Sticky.defaultProps = {
  */
 Sticky.propTypes = {
     enabled: PropTypes.bool,
+    stickToBottom: PropTypes.bool,
     top: PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.number
+    ]),
+    bottom: PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.number
+    ]),
+    topBoundary: PropTypes.oneOfType([
+        PropTypes.object,  // TODO, may remove
         PropTypes.string,
         PropTypes.number
     ]),
