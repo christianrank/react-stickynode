@@ -456,7 +456,7 @@ var Sticky = (function (_Component) {
 
             // always use translate3d to enhance the performance
             this.translate(innerStyle, this.state.pos);
-            if (this.state.status !== STATUS_ORIGINAL) {
+            if (this.state.status !== STATUS_ORIGINAL && this.state.status !== STATUS_RELEASED) {
                 innerStyle.width = this.state.width + 'px';
                 outerStyle.height = this.state.height + 'px';
             }
